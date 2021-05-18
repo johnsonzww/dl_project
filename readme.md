@@ -12,6 +12,7 @@ Obstruction in images would cause inconvenience in many scenarios. For instance,
 
 ## Usage
 
+### access via code 
 1. edit config file *run_fence.py*
    - TRAINING_DATA_PATH: where test data is stored.
    - TRAINING_SCENE: the scene number, your test case should be name as *"TRAINING_SCENE_I0"* - *"TRAINING_SCENE_I4"*, which is a 5 frame sequence of picture. *e.g. TRAINING_SCENE="00001", pics: 00001_I0.png, 00001_I1.png, 00001_I2.png, 00001_I3.png, 00001_I4.png*.
@@ -20,3 +21,6 @@ Obstruction in images would cause inconvenience in many scenarios. For instance,
 2. prepared a 5 frame sequence and put it in to *TRAINING_DATA_PATH*
 3. run the program with:
    - ``` python run_fence.py ```
+
+### access via colab
+https://colab.research.google.com/drive/1phexVRtCPbVJxfj0cjhBrT6nlvhEljGU?usp=sharing
