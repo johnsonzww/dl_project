@@ -686,18 +686,19 @@ def train():
 
         fig = plt.figure(figsize=(10, 6))
         plt.plot(steps, loss_stored)
-        plt.savefig(FLAGS.training_scene + '.jpg')
+        # plt.savefig(FLAGS.training_scene + '.jpg')
         return loss_stored
 
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = GPU_ID
     losses = []
-    for i in range(2):
-        loss = train()
-        losses.append(losses)
-        os.system(
-            'python36 test_fence.py --test_dataset_name ' + 'fence_imgs/' + '/' + '00006' + ' --img_type ' + 'png' + ' --ckpt_path ' + 'temp_online_ckpt/' + 'model.ckpt-' + str(
-                FLAGS.max_steps - 1) + ' --output_dir ' + 'output' + '/' + FLAGS.training_scene)
-        FLAGS.ckpt_path = FLAGS.train_dir + 'model.ckpt-' + str(FLAGS.max_steps - 1)
-        FLAGS.training_scene = '0000' + str(int(FLAGS.training_scene) + 1)
+    train()
+    # for i in range(2):
+    #     loss = train()
+    #     losses.append(losses)
+    #     os.system(
+    #         'python36 test_fence.py --test_dataset_name ' + 'fence_imgs/' + '/' + '00006' + ' --img_type ' + 'png' + ' --ckpt_path ' + 'temp_online_ckpt/' + 'model.ckpt-' + str(
+    #             FLAGS.max_steps - 1) + ' --output_dir ' + 'output' + '/' + FLAGS.training_scene)
+    #     FLAGS.ckpt_path = FLAGS.train_dir + 'model.ckpt-' + str(FLAGS.max_steps - 1)
+    #     FLAGS.training_scene = '0000' + str(int(FLAGS.training_scene) + 1)
