@@ -16,32 +16,32 @@ import matplotlib.pyplot as plt
 FLAGS = tf.app.flags.FLAGS
 
 # Define necessary FLAGS
+train_dir = './temp_online_ckpt/'
 tf.app.flags.DEFINE_string('train_dir', './temp_online_ckpt/',
                            """Directory where to write event logs """
                            """and checkpoint.""")
+max_steps = 210
 tf.app.flags.DEFINE_integer('max_steps', 210,
                             """Number of batches to run.""")
+batch_size = 1
 tf.app.flags.DEFINE_integer(
     'batch_size', 1, 'The number of samples in each batch.')
+initial_learning_rate = 0.0001
 tf.app.flags.DEFINE_float('initial_learning_rate', 0.0001,
                           """Initial learning rate.""")
+training_scene = '00001'
 tf.app.flags.DEFINE_string('training_scene', '00001',
                            """If specified, restore this pretrained model """
                            """before beginning any training.""")
-tf.app.flags.DEFINE_integer('height', 320,
-                            """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('width', 320,
-                            """Number of batches to run.""")
-tf.app.flags.DEFINE_string('GPU_ID', '0',
-                           """Number of batches to run.""")
+training_data_path = 'fence_imgs/'
 tf.app.flags.DEFINE_string('training_data_path', 'fence_imgs/', """Number of batches to run.""")
-
+ckpt_path = 'train_dir_imgReconstruction_Fence/model.ckpt-239999'
 tf.app.flags.DEFINE_string('ckpt_path', 'train_dir_imgReconstruction_Fence/model.ckpt-239999', """starting point""")
 ORIGINAL_H = 256
 ORIGINAL_W = 448
-CROP_PATCH_H = FLAGS.height
-CROP_PATCH_W = FLAGS.width
-GPU_ID = FLAGS.GPU_ID
+CROP_PATCH_H = 320
+CROP_PATCH_W = 320
+GPU_ID = '0'
 
 import sys
 
@@ -116,14 +116,14 @@ def create_outgoing_mask(flow):
     return tf.expand_dims(tf.cast(inside, tf.float32), 3)
 
 
-def warp(I, F, H, W):
+def warp(I, F, H, W, size):
     return tf.reshape(dense_image_warp(I, tf.stack([-F[..., 1], -F[..., 0]], -1)),
-                      [FLAGS.batch_size, H, W, 3])
+                      [size, H, W, 3])
 
 
-def warp_1c(I, F, H, W):
+def warp_1c(I, F, H, W, size):
     return tf.reshape(dense_image_warp(I, tf.stack([-F[..., 1], -F[..., 0]], -1)),
-                      [FLAGS.batch_size, H, W, 1])
+                      [size, H, W, 1])
 
 
 def train():
@@ -184,7 +184,7 @@ def train():
                     tmp_list.append(tf.stack([B[i], B[j]], 1))
 
             PWC_input = tf.concat(tmp_list, 0)  # [batch_size*20, 2, H, W, 3]
-            PWC_input = tf.reshape(PWC_input, [FLAGS.batch_size * (frameNum * frameNum), 2, pwc_h, pwc_w, 3])
+            PWC_input = tf.reshape(PWC_input, [batch_size * (frameNum * frameNum), 2, pwc_h, pwc_w, 3])
             pred_labels, _ = nn.nn(PWC_input, reuse=tf.AUTO_REUSE)
             print(pred_labels)
 
@@ -202,7 +202,7 @@ def train():
                 FB_tmp = []
                 for j in range(frameNum):
                     FB_tmp.append(tf.stop_gradient(
-                        pred_labels[FLAGS.batch_size * counter:FLAGS.batch_size * (counter + 1)] * ratio_tensor))
+                        pred_labels[batch_size * counter:batch_size * (counter + 1)] * ratio_tensor))
                     counter += 1
                 FB.append(FB_tmp)
 
@@ -228,7 +228,7 @@ def train():
                     tmp_list.append(tf.stack([B_tmp[i], B_tmp[j]], 1))
 
             PWC_input = tf.concat(tmp_list, 0)  # [batch_size*20, 2, H, W, 3]
-            PWC_input = tf.reshape(PWC_input, [FLAGS.batch_size * (frameNum * frameNum * 2), 2, pwc_h, pwc_w, 3])
+            PWC_input = tf.reshape(PWC_input, [batch_size * (frameNum * frameNum * 2), 2, pwc_h, pwc_w, 3])
             pred_labels, _ = nn.nn(PWC_input, reuse=tf.AUTO_REUSE)
             print(pred_labels)
 
@@ -248,9 +248,9 @@ def train():
                 FB_tmp = []
                 for j in range(frameNum):
                     FF_tmp.append(tf.stop_gradient(
-                        pred_labels[FLAGS.batch_size * counter:FLAGS.batch_size * (counter + 1)] * ratio_tensor))
-                    FB_tmp.append(tf.stop_gradient(pred_labels[FLAGS.batch_size * (
-                            counter + frameNum * frameNum):FLAGS.batch_size * (
+                        pred_labels[batch_size * counter:batch_size * (counter + 1)] * ratio_tensor))
+                    FB_tmp.append(tf.stop_gradient(pred_labels[batch_size * (
+                            counter + frameNum * frameNum):batch_size * (
                             counter + 1 + frameNum * frameNum)] * ratio_tensor))
                     counter += 1
                 FF.append(FF_tmp)
@@ -293,32 +293,32 @@ def train():
             """compute loss only in (mask1 & mask2)"""
             outmask = create_outgoing_mask(FF02) * create_outgoing_mask(FB02)
             sub_loss += (loss_weight[i] * tf.reduce_sum(tf.abs(
-                I0_lvl - warp(F2, FF02, CROP_PATCH_H, CROP_PATCH_W) - warp(B2, FB02, CROP_PATCH_H,
-                                                                           CROP_PATCH_W) * warp_1c(1.0 - A2, FF02,
+                I0_lvl - warp(F2, FF02, CROP_PATCH_H, CROP_PATCH_W,batch_size) - warp(B2, FB02, CROP_PATCH_H,
+                                                                           CROP_PATCH_W,batch_size) * warp_1c(1.0 - A2, FF02,
                                                                                                    CROP_PATCH_H,
-                                                                                                   CROP_PATCH_W)) * outmask) / (
+                                                                                                   CROP_PATCH_W,batch_size)) * outmask) / (
                                  3 * tf.reduce_sum(outmask) + 1e-10))
             outmask = create_outgoing_mask(FF12) * create_outgoing_mask(FB12)
             sub_loss += (loss_weight[i] * tf.reduce_sum(tf.abs(
-                I1_lvl - warp(F2, FF12, CROP_PATCH_H, CROP_PATCH_W) - warp(B2, FB12, CROP_PATCH_H,
-                                                                           CROP_PATCH_W) * warp_1c(1.0 - A2, FF12,
+                I1_lvl - warp(F2, FF12, CROP_PATCH_H, CROP_PATCH_W,batch_size) - warp(B2, FB12, CROP_PATCH_H,
+                                                                           CROP_PATCH_W,batch_size) * warp_1c(1.0 - A2, FF12,
                                                                                                    CROP_PATCH_H,
-                                                                                                   CROP_PATCH_W)) * outmask) / (
+                                                                                                   CROP_PATCH_W,batch_size)) * outmask) / (
                                  3 * tf.reduce_sum(outmask) + 1e-10))
             sub_loss += (loss_weight[i] * tf.reduce_mean(tf.abs(I2_lvl - F2 - B2 * (1.0 - A2))))
             outmask = create_outgoing_mask(FF32) * create_outgoing_mask(FB32)
             sub_loss += (loss_weight[i] * tf.reduce_sum(tf.abs(
-                I3_lvl - warp(F2, FF32, CROP_PATCH_H, CROP_PATCH_W) - warp(B2, FB32, CROP_PATCH_H,
-                                                                           CROP_PATCH_W) * warp_1c(1.0 - A2, FF32,
+                I3_lvl - warp(F2, FF32, CROP_PATCH_H, CROP_PATCH_W,batch_size) - warp(B2, FB32, CROP_PATCH_H,
+                                                                           CROP_PATCH_W,batch_size) * warp_1c(1.0 - A2, FF32,
                                                                                                    CROP_PATCH_H,
-                                                                                                   CROP_PATCH_W)) * outmask) / (
+                                                                                                   CROP_PATCH_W,batch_size)) * outmask) / (
                                  3 * tf.reduce_sum(outmask) + 1e-10))
             outmask = create_outgoing_mask(FF42) * create_outgoing_mask(FB42)
             sub_loss += (loss_weight[i] * tf.reduce_sum(tf.abs(
-                I4_lvl - warp(F2, FF42, CROP_PATCH_H, CROP_PATCH_W) - warp(B2, FB42, CROP_PATCH_H,
-                                                                           CROP_PATCH_W) * warp_1c(1.0 - A2, FF42,
+                I4_lvl - warp(F2, FF42, CROP_PATCH_H, CROP_PATCH_W,batch_size) - warp(B2, FB42, CROP_PATCH_H,
+                                                                           CROP_PATCH_W,batch_size) * warp_1c(1.0 - A2, FF42,
                                                                                                    CROP_PATCH_H,
-                                                                                                   CROP_PATCH_W)) * outmask) / (
+                                                                                                   CROP_PATCH_W,batch_size)) * outmask) / (
                                  3 * tf.reduce_sum(outmask) + 1e-10))
             warp_loss = sub_loss
             print("warp_loss = " + str(warp_loss))
@@ -330,44 +330,34 @@ def train():
             print("tv_loss = " + str(sub_loss - warp_loss))
             return warp_loss, sub_loss
 
-        for img_path in sorted(glob.glob(FLAGS.training_data_path + FLAGS.training_scene + '*.png')):
+        for img_path in sorted(glob.glob(training_data_path + training_scene + '*.png')):
             resize_and_save(img_path)
-        # dataset_online_I0 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I0.png')
-        # dataset_online_I1 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I1.png')
-        # dataset_online_I2 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I2.png')
-        # dataset_online_I3 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I3.png')
-        # dataset_online_I4 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I4.png')
-        batch_online_I0 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I0.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I1 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I1.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I2 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I2.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I3 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I3.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I4 = get_online_data('tmp_large_image/' + FLAGS.training_scene + '*I4.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
+        batch_online_I0 = get_online_data('tmp_large_image/' + training_scene + '*I0.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I1 = get_online_data('tmp_large_image/' + training_scene + '*I1.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I2 = get_online_data('tmp_large_image/' + training_scene + '*I2.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I3 = get_online_data('tmp_large_image/' + training_scene + '*I3.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I4 = get_online_data('tmp_large_image/' + training_scene + '*I4.png').batch(
+            batch_size).make_initializable_iterator()
         fused_frame0 = batch_online_I0.get_next()
         fused_frame1 = batch_online_I1.get_next()
         fused_frame2 = batch_online_I2.get_next()
         fused_frame3 = batch_online_I3.get_next()
         fused_frame4 = batch_online_I4.get_next()
         # returned dataset
-        # dataset_online_I0_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I0.png')
-        # dataset_online_I1_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I1.png')
-        # dataset_online_I2_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I2.png')
-        # dataset_online_I3_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I3.png')
-        # dataset_online_I4_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I4.png')
-        batch_online_I0_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I0.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I1_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I1.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I2_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I2.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I3_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I3.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
-        batch_online_I4_large = get_online_data_large('tmp_large_image/' + FLAGS.training_scene + '*I4.png').batch(
-            FLAGS.batch_size).make_initializable_iterator()
+        batch_online_I0_large = get_online_data_large('tmp_large_image/' + training_scene + '*I0.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I1_large = get_online_data_large('tmp_large_image/' + training_scene + '*I1.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I2_large = get_online_data_large('tmp_large_image/' + training_scene + '*I2.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I3_large = get_online_data_large('tmp_large_image/' + training_scene + '*I3.png').batch(
+            batch_size).make_initializable_iterator()
+        batch_online_I4_large = get_online_data_large('tmp_large_image/' + training_scene + '*I4.png').batch(
+            batch_size).make_initializable_iterator()
         fused_frame0_large = batch_online_I0_large.get_next()
         fused_frame1_large = batch_online_I1_large.get_next()
         fused_frame2_large = batch_online_I2_large.get_next()
@@ -389,7 +379,7 @@ def train():
 
         """image"""
         fused_frames = [fused_frame0, fused_frame1, fused_frame2, fused_frame3, fused_frame4]
-        model4 = ImageReconstruction_fence_arbitraryFrameNum(FLAGS.batch_size, CROP_PATCH_H, CROP_PATCH_W, level=4)
+        model4 = ImageReconstruction_fence_arbitraryFrameNum(batch_size, CROP_PATCH_H, CROP_PATCH_W, level=4)
         B_pred_4, A_pred_4 = model4._build_model(fused_frames,
                                                  None, None,
                                                  [[tf.zeros_like(FB01_4), FB01_4, FB02_4, FB03_4, FB04_4],
@@ -402,7 +392,7 @@ def train():
                         int(np.ceil(float(CROP_PATCH_H // (2 ** 4)) / 64.0)) * 64,
                         int(np.ceil(float(CROP_PATCH_W // (2 ** 4)) / 64.0)) * 64, 3)
 
-        model3 = ImageReconstruction_fence_arbitraryFrameNum(FLAGS.batch_size, CROP_PATCH_H, CROP_PATCH_W, level=3)
+        model3 = ImageReconstruction_fence_arbitraryFrameNum(batch_size, CROP_PATCH_H, CROP_PATCH_W, level=3)
         B_pred_3, A_pred_3 = model3._build_model(fused_frames,
                                                  B_pred_4, A_pred_4, FB_3)
 
@@ -411,7 +401,7 @@ def train():
                         int(np.ceil(float(CROP_PATCH_H // (2 ** 3)) / 64.0)) * 64,
                         int(np.ceil(float(CROP_PATCH_W // (2 ** 3)) / 64.0)) * 64, 2)
 
-        model2 = ImageReconstruction_fence_arbitraryFrameNum(FLAGS.batch_size, CROP_PATCH_H, CROP_PATCH_W, level=2)
+        model2 = ImageReconstruction_fence_arbitraryFrameNum(batch_size, CROP_PATCH_H, CROP_PATCH_W, level=2)
         B_pred_2, A_pred_2 = model2._build_model(fused_frames,
                                                  B_pred_3, A_pred_3, FB_2)
         FB_1 = PWC_full(B_pred_2,
@@ -419,7 +409,7 @@ def train():
                         int(np.ceil(float(CROP_PATCH_H // (2 ** 2)) / 64.0)) * 64,
                         int(np.ceil(float(CROP_PATCH_W // (2 ** 2)) / 64.0)) * 64, 1)
 
-        model1 = ImageReconstruction_fence_arbitraryFrameNum(FLAGS.batch_size, CROP_PATCH_H, CROP_PATCH_W, level=1)
+        model1 = ImageReconstruction_fence_arbitraryFrameNum(batch_size, CROP_PATCH_H, CROP_PATCH_W, level=1)
         B_pred_1, A_pred_1 = model1._build_model(fused_frames,
                                                  B_pred_2, A_pred_2, FB_1)
         FB_0 = PWC_full(B_pred_1,
@@ -427,7 +417,7 @@ def train():
                         int(np.ceil(float(CROP_PATCH_H // (2 ** 1)) / 64.0)) * 64,
                         int(np.ceil(float(CROP_PATCH_W // (2 ** 1)) / 64.0)) * 64, 0)
 
-        model0 = ImageReconstruction_fence_arbitraryFrameNum(FLAGS.batch_size, CROP_PATCH_H, CROP_PATCH_W, level=0)
+        model0 = ImageReconstruction_fence_arbitraryFrameNum(batch_size, CROP_PATCH_H, CROP_PATCH_W, level=0)
         B_pred_0, A_pred_0 = model0._build_model(fused_frames,
                                                  B_pred_1, A_pred_1, FB_0)
 
@@ -598,7 +588,7 @@ def train():
 
         # Create an optimizer that performs gradient descent.
         with tf.variable_scope(tf.get_variable_scope(), reuse=None):
-            update_op = tf.train.AdamOptimizer(FLAGS.initial_learning_rate).minimize(loss, var_list=dof_vars,
+            update_op = tf.train.AdamOptimizer(initial_learning_rate).minimize(loss, var_list=dof_vars,
                                                                                      global_step=global_step)
 
         tf.summary.scalar('loss', loss)
@@ -616,14 +606,14 @@ def train():
         tf.summary.image('blur_F0', F_blurred[0], 3)
         tf.summary.image('blur_B0', B_blurred[0], 3)
 
-        tf.summary.image('warpF0to2', warp(F_pred_0[2], FF_[0][2], CROP_PATCH_H, CROP_PATCH_W), 3)
-        tf.summary.image('warpB0to2', warp(B_pred_0[2], FB_[0][2], CROP_PATCH_H, CROP_PATCH_W), 3)
+        tf.summary.image('warpF0to2', warp(F_pred_0[2], FF_[0][2], CROP_PATCH_H, CROP_PATCH_W,batch_size), 3)
+        tf.summary.image('warpB0to2', warp(B_pred_0[2], FB_[0][2], CROP_PATCH_H, CROP_PATCH_W,batch_size), 3)
         tf.summary.image('sum0to2', tf.clip_by_value(
-            warp(F_pred_0[2], FF_[0][2], CROP_PATCH_H, CROP_PATCH_W) + warp(B_pred_0[2], FB_[0][2], CROP_PATCH_H,
-                                                                            CROP_PATCH_W) * warp_1c((1.0 - A_pred_0[2]),
+            warp(F_pred_0[2], FF_[0][2], CROP_PATCH_H, CROP_PATCH_W,batch_size) + warp(B_pred_0[2], FB_[0][2], CROP_PATCH_H,
+                                                                            CROP_PATCH_W,batch_size) * warp_1c((1.0 - A_pred_0[2]),
                                                                                                     FF_[0][2],
                                                                                                     CROP_PATCH_H,
-                                                                                                    CROP_PATCH_W), 0.0,
+                                                                                                    CROP_PATCH_W,batch_size), 0.0,
             1.0), 3)
         tf.summary.image('sum2', tf.clip_by_value(F_pred_0[2] + B_pred_0[2] * (1.0 - A_pred_0[2]), 0.0, 1.0), 3)
 
@@ -656,16 +646,16 @@ def train():
                                           "FeaturePyramidExtractor" in v.name or "TranslationEstimator" in v.name])
         saver4.restore(sess, 'train_dir_initFlow_Fence/model.ckpt-239999')
         saver5 = tf.train.Saver(var_list=[v for v in tf.all_variables() if "FusionLayer_" in v.name])
-        saver5.restore(sess, FLAGS.ckpt_path)
+        saver5.restore(sess, ckpt_path)
 
         # Summary Writter
         summary_writer = tf.summary.FileWriter(
-            FLAGS.train_dir,
+            train_dir,
             graph=sess.graph)
 
         loss_stored = []
         steps = []
-        for step in range(0, FLAGS.max_steps):
+        for step in range(0, max_steps):
 
             # Run single step update.
             _, loss_value = sess.run([update_op, loss])
@@ -680,13 +670,13 @@ def train():
                 summary_writer.add_summary(summary_str, step)
 
             # Save checkpoint
-            if step % 100 == 0 or (step + 1) == FLAGS.max_steps:
-                checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+            if step % 100 == 0 or (step + 1) == max_steps:
+                checkpoint_path = os.path.join(train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 
         fig = plt.figure(figsize=(10, 6))
         plt.plot(steps, loss_stored)
-        plt.savefig(FLAGS.training_scene + '.jpg')
+        plt.savefig(training_scene + '.jpg')
         return loss_stored
 
 
@@ -698,6 +688,6 @@ if __name__ == '__main__':
         losses.append(losses)
         os.system(
             'python36 test_fence.py --test_dataset_name ' + 'fence_imgs/' + '/' + '00006' + ' --img_type ' + 'png' + ' --ckpt_path ' + 'temp_online_ckpt/' + 'model.ckpt-' + str(
-                FLAGS.max_steps - 1) + ' --output_dir ' + 'output' + '/' + FLAGS.training_scene)
-        FLAGS.ckpt_path = FLAGS.train_dir + 'model.ckpt-' + str(FLAGS.max_steps - 1)
-        FLAGS.training_scene = '0000' + str(int(FLAGS.training_scene) + 1)
+                max_steps - 1) + ' --output_dir ' + 'output' + '/' + training_scene)
+        ckpt_path = train_dir + 'model.ckpt-' + str(max_steps - 1)
+        training_scene = '0000' + str(int(training_scene) + 1)
