@@ -232,7 +232,7 @@ class ModelPWCNet(ModelBase):
     # Model mgmt
     ###
     def build_model(self):
-        print('yulunliu build_model')
+        # print('yulunliu build_model')
         """Build model
         Called by the base class when building the TF graph to setup the list of output tensors
         """
